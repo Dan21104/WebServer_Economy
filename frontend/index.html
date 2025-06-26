@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Ekonomika</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: white;
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    canvas {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Transakce</h1>
+  <ul id="transactions"></ul>
+  <canvas id="chart"></canvas>
+
+  <script>
+    let lastDataJSON = '';
+
+    async function fetchDataAndRender() {
+      try {
+        const response = await fetch('/api/transactions');
+        const data = await response.json();
+
+        const dataJSON = JSON.stringify(data);
+        if (dataJSON === lastDataJSON) return; // žádná změna
+
+        lastDataJSON = dataJSON;
+
+        // Výpis transakcí
+        const ul = document.getElementById('transactions');
+        ul.innerHTML = '';
+        data.forEach(entry => {
+          const li = document.createElement('li');
+          li.textContent = `${entry.amount} USD – ${entry.location} – ${new Date(entry.timestamp).toLocaleString()}`;
+          ul.appendChild(li);
+        });
+
+        // Přepočet pro graf + seřazení
+        const soucty = {};
+        data.forEach(entry => {
+        if (!soucty[entry.location]) {
+            soucty[entry.location] = 0;
+        }
+        soucty[entry.location] += entry.amount;
+        });
+
+        // Seřazení podle hodnoty sestupně
+        const sortedEntries = Object.entries(soucty).sort((a, b) => b[1] - a[1]);
+        const sortedLabels = sortedEntries.map(entry => entry[0]);
+        const sortedValues = sortedEntries.map(entry => entry[1]);
+
+
+        // Render grafu
+        const ctx = document.getElementById('chart').getContext('2d');
+        if (window.myChart) {
+          window.myChart.destroy();
+        }
+
+        window.myChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: sortedLabels,
+            datasets: [{
+                label: 'Součet transakcí podle lokace (USD)',
+                data: sortedValues,
+                backgroundColor: '#f39c12',
+                maxBarThickness: 90 // Omezí maximální šířku sloupce
+                }]
+            },
+            options: {
+                scales: {
+                y: {
+                    beginAtZero: true,
+                    suggestedMax: Math.max(...Object.values(soucty)) * 1.1
+                },
+                x: {
+                    barPercentage: 0.7,
+                    categoryPercentage: 0.6
+                }
+                },
+                plugins: {
+                legend: {
+                    labels: {
+                    color: "white"
+                    }
+                }
+                }
+            }
+            });
+
+      } catch (error) {
+        console.error('Chyba při načítání dat:', error);
+      }
+    }
+
+    fetchDataAndRender();
+    setInterval(fetchDataAndRender, 5000); // každých 5 sekund
+  </script>
+</body>
+</html>
